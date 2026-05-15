@@ -154,10 +154,12 @@ export default function TaskDetail() {
         const { data } = await laravelApi.get(`/teams/${teamId}`);
         setTeamMembers(data.data?.members || []);
       } else {
-        // Members cannot reassign, but we still need the team list
-        // for @mention highlighting and suggestion in comments
-        const { data } = await laravelApi.get(`/teams/${teamId}`);
-        setTeamMembers(data.data?.members || []);
+        // Members cannot reassign, but we still need the user list
+        // for @mention highlighting and suggestions in comments.
+        // Use /users/directory (all-roles endpoint) since the member
+        // may not belong to the team and GET /teams/{id} would 403.
+        const { data } = await laravelApi.get('/users/directory');
+        setTeamMembers(data.data || []);
       }
     } catch {}
   }
