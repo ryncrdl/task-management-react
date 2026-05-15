@@ -153,8 +153,12 @@ export default function TaskDetail() {
         // Manager can only assign to their team members
         const { data } = await laravelApi.get(`/teams/${teamId}`);
         setTeamMembers(data.data?.members || []);
+      } else {
+        // Members cannot reassign, but we still need the team list
+        // for @mention highlighting and suggestion in comments
+        const { data } = await laravelApi.get(`/teams/${teamId}`);
+        setTeamMembers(data.data?.members || []);
       }
-      // Members cannot assign — leave teamMembers empty
     } catch {}
   }
 
