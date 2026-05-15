@@ -287,7 +287,7 @@ export default function TaskDetail() {
   if (!task) return null;
 
   const canEdit = isAdmin || isManager || task.assigned_to?.id === user?.id;
-  const canDelete = isAdmin || task.created_by?.id === user?.id;
+  const canDelete = isAdmin || isManager || task.created_by?.id === user?.id;
   const transitions = STATUS_TRANSITIONS[task.status] || [];
   const isOverdue = task.due_date && new Date(task.due_date) < new Date() && !['completed', 'cancelled'].includes(task.status);
 

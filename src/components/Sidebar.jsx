@@ -5,7 +5,7 @@ const navItems = [
   { to: '/dashboard',    label: 'Dashboard',     icon: '🏠', roles: ['admin', 'manager', 'member'] },
   { to: '/tasks',        label: 'Tasks',          icon: '✅', roles: ['admin', 'manager', 'member'] },
   { to: '/teams',        label: 'Teams',          icon: '👥', roles: ['admin', 'manager', 'member'] },
-  { to: '/users',        label: 'Users',          icon: '👤', roles: ['admin', 'manager'] },
+  { to: '/users',        label: 'Users',          icon: '👤', roles: ['admin'] },
   { to: '/analytics',    label: 'Analytics',      icon: '📊', roles: ['admin', 'manager'] },
   { to: '/activity-log', label: 'Activity Log',   icon: '📜', roles: ['admin', 'manager'] },
   { to: '/cron-jobs',    label: 'Cron Jobs',       icon: '⏱️', roles: ['admin'] },

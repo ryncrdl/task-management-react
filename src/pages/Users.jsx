@@ -108,7 +108,9 @@ export default function Users() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Users</h1>
-        <button onClick={() => setShowCreate(true)} className="btn-primary">+ New User</button>
+        {isAdmin && (
+          <button onClick={() => setShowCreate(true)} className="btn-primary">+ New User</button>
+        )}
       </div>
 
       {/* Filters */}
@@ -168,11 +170,15 @@ export default function Users() {
                   </td>
                   <td className="px-5 py-3 text-right">
                     <div className="flex justify-end gap-2">
-                      <button onClick={() => openEdit(u)} className="text-xs text-blue-600 hover:underline">Edit</button>
-                      <button onClick={() => openReset(u)} className="text-xs text-indigo-600 hover:underline">Reset pwd</button>
-                      <button onClick={() => handleToggleStatus(u)} className={`text-xs hover:underline ${u.is_active ? 'text-red-500' : 'text-green-600'}`}>
-                        {u.is_active ? 'Deactivate' : 'Activate'}
-                      </button>
+                      {isAdmin && (
+                        <>
+                          <button onClick={() => openEdit(u)} className="text-xs text-blue-600 hover:underline">Edit</button>
+                          <button onClick={() => openReset(u)} className="text-xs text-indigo-600 hover:underline">Reset pwd</button>
+                          <button onClick={() => handleToggleStatus(u)} className={`text-xs hover:underline ${u.is_active ? 'text-red-500' : 'text-green-600'}`}>
+                            {u.is_active ? 'Deactivate' : 'Activate'}
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
