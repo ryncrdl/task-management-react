@@ -30,6 +30,7 @@ export function useSocket(handlers = {}, rooms = []) {
   const joinRooms = useCallback((socket) => {
     rooms.forEach((room) => {
       if (room.startsWith('team:'))      socket.emit('join:team',  room.replace('team:', ''));
+      else if (room.startsWith('user:')) socket.emit('join:user',  room.replace('user:', ''));
       else                               socket.emit('join:task',  room.replace('task:', ''));
     });
   }, [rooms.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -60,8 +61,9 @@ export function useSocket(handlers = {}, rooms = []) {
 
       // Leave rooms
       rooms.forEach((room) => {
-        if (room.startsWith('team:')) socket.emit('leave:team', room.replace('team:', ''));
-        else                          socket.emit('leave:task', room.replace('task:', ''));
+        if (room.startsWith('team:'))      socket.emit('leave:team', room.replace('team:', ''));
+        else if (room.startsWith('user:')) socket.emit('leave:user', room.replace('user:', ''));
+        else                               socket.emit('leave:task', room.replace('task:', ''));
       });
 
       // Do NOT disconnect — the socket is a shared singleton that must stay
