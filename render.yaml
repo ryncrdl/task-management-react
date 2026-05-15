@@ -3,6 +3,11 @@ services:
     env: static
     buildCommand: npm install && npm run build
     staticPublishPath: dist
+    envVars:
+      - key: VITE_LARAVEL_API_URL
+        sync: false   # set in Render dashboard: https://task-management-laravel-api.onrender.com/api
+      - key: VITE_NODE_API_URL
+        sync: false   # set in Render dashboard: https://<your-node-service>.onrender.com/api
     routes:
       - type: rewrite
         source: /*
