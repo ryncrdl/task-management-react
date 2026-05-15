@@ -10,7 +10,7 @@ Consumes both the **Laravel API** and **Node.js** services.
 
 | Service | URL |
 |---|---|
-| **Frontend** | *(deploy to Render / Netlify / Vercel and update here)* |
+| **Frontend** | `https://task-management-react-e9ni.onrender.com` |
 | **GitHub** | `https://github.com/ryncrdl/task-management-react` |
 | **Laravel API** | `https://task-management-laravel-api.onrender.com/api` |
 | **Node.js Service** | `https://task-management-node-services.onrender.com` |
