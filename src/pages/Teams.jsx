@@ -23,6 +23,8 @@ export default function Teams() {
   const [addMemberId, setAddMemberId] = useState('');
   const [addMemberRole, setAddMemberRole] = useState('member');
 
+  const [confirmRemove, setConfirmRemove] = useState(null); // { teamId, userId, name }
+
   useEffect(() => { loadTeams(); }, []);
 
   async function loadTeams() {
@@ -81,8 +83,10 @@ export default function Teams() {
     } finally { setSaving(false); }
   }
 
-  async function handleRemoveMember(teamId, userId) {
-    if (!window.confirm('Remove this member?')) return;
+  async function handleRemoveMember() {
+    if (!confirmRemove) return;
+    const { teamId, userId } = confirmRemove;
+    setConfirmRemove(null);
     try {
       await laravelApi.delete(`/teams/${teamId}/members/${userId}`);
       addToast('Member removed.', 'success');
@@ -146,7 +150,7 @@ export default function Teams() {
                     {(isAdmin || isManager) && (
                       <td className="py-2 text-right">
                         {m.id !== user?.id && (
-                          <button onClick={() => handleRemoveMember(selectedTeam.id, m.id)} className="text-xs text-red-500 hover:underline">Remove</button>
+                          <button onClick={() => setConfirmRemove({ teamId: selectedTeam.id, userId: m.id, name: m.name })} className="text-xs text-red-500 hover:underline">Remove</button>
                         )}
                       </td>
                     )}
@@ -173,6 +177,17 @@ export default function Teams() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* Confirm Remove Member Modal */}
+      <Modal isOpen={!!confirmRemove} onClose={() => setConfirmRemove(null)} title="Remove Member">
+        <p className="text-sm text-gray-600 mb-6">
+          Are you sure you want to remove <span className="font-semibold">{confirmRemove?.name}</span> from the team?
+        </p>
+        <div className="flex justify-end gap-3 pt-2 border-t">
+          <button type="button" onClick={() => setConfirmRemove(null)} className="btn-secondary">Cancel</button>
+          <button type="button" onClick={handleRemoveMember} className="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">Remove</button>
+        </div>
       </Modal>
 
       {/* Add Member Modal */}
