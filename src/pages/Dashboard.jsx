@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { laravelApi } from '../api/axiosConfig';
 import { useAuth } from '../context/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { StatCardSkeleton, TaskCardSkeleton } from '../components/Skeletons';
 import TaskCard from '../components/TaskCard';
 
 export default function Dashboard() {
@@ -99,7 +100,9 @@ export default function Dashboard() {
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {statCards.map((card) => (
+        {loading
+          ? Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)
+          : statCards.map((card) => (
           <div key={card.label} className={`card border ${colorMap[card.color]} p-5`}>
             <div className="flex items-center justify-between">
               <div>
@@ -117,8 +120,8 @@ export default function Dashboard() {
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Tasks</h2>
 
         {loading ? (
-          <div className="flex justify-center py-12">
-            <LoadingSpinner size="lg" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => <TaskCardSkeleton key={i} />)}
           </div>
         ) : tasks.length === 0 ? (
           <div className="card text-center py-12">

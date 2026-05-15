@@ -2,12 +2,13 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const navItems = [
-  { to: '/dashboard', label: 'Dashboard', icon: '🏠', roles: ['admin', 'manager', 'member'] },
-  { to: '/tasks', label: 'Tasks', icon: '✅', roles: ['admin', 'manager', 'member'] },
-  { to: '/teams', label: 'Teams', icon: '👥', roles: ['admin', 'manager', 'member'] },
-  { to: '/users', label: 'Users', icon: '👤', roles: ['admin', 'manager'] },
-  { to: '/analytics', label: 'Analytics', icon: '📊', roles: ['admin', 'manager'] },
-  { to: '/settings', label: 'Settings', icon: '⚙️', roles: ['admin', 'manager', 'member'] },
+  { to: '/dashboard',    label: 'Dashboard',     icon: '🏠', roles: ['admin', 'manager', 'member'] },
+  { to: '/tasks',        label: 'Tasks',          icon: '✅', roles: ['admin', 'manager', 'member'] },
+  { to: '/teams',        label: 'Teams',          icon: '👥', roles: ['admin', 'manager', 'member'] },
+  { to: '/users',        label: 'Users',          icon: '👤', roles: ['admin', 'manager'] },
+  { to: '/analytics',    label: 'Analytics',      icon: '📊', roles: ['admin', 'manager'] },
+  { to: '/activity-log', label: 'Activity Log',   icon: '📜', roles: ['admin', 'manager'] },
+  { to: '/settings',     label: 'Settings',       icon: '⚙️', roles: ['admin', 'manager', 'member'] },
 ];
 
 export default function Sidebar() {

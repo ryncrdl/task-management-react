@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import Modal from '../components/Modal';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { UserRowSkeleton } from '../components/Skeletons';
 
 export default function Users() {
   const { isAdmin, isManager } = useAuth();
@@ -21,6 +22,10 @@ export default function Users() {
 
   const [editUser, setEditUser] = useState(null);
   const [editForm, setEditForm] = useState({ name: '', email: '', role: '' });
+
+  const [resetUser, setResetUser] = useState(null);
+  const [resetPwd, setResetPwd] = useState({ new: '', confirm: '' });
+  const [savingReset, setSavingReset] = useState(false);
 
   useEffect(() => { loadUsers(1); }, [filters]);
 
@@ -74,6 +79,29 @@ export default function Users() {
     setEditForm({ name: u.name, email: u.email, role: u.role });
   }
 
+  function openReset(u) {
+    setResetUser(u);
+    setResetPwd({ new: '', confirm: '' });
+  }
+
+  async function handleResetPassword(e) {
+    e.preventDefault();
+    if (resetPwd.new !== resetPwd.confirm) {
+      addToast('Passwords do not match.', 'error');
+      return;
+    }
+    setSavingReset(true);
+    try {
+      await laravelApi.patch(`/users/${resetUser.id}/password`, {
+        new_password: resetPwd.new,
+        new_password_confirmation: resetPwd.confirm,
+      });
+      addToast(`Password for ${resetUser.name} has been reset.`, 'success');
+      setResetUser(null);
+    } catch (err) { addToast(getErrorMessage(err), 'error'); }
+    finally { setSavingReset(false); }
+  }
+
   const roleBadge = { admin: 'bg-purple-100 text-purple-700', manager: 'bg-blue-100 text-blue-700', member: 'bg-gray-100 text-gray-700' };
 
   return (
@@ -99,7 +127,22 @@ export default function Users() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-16"><LoadingSpinner size="lg" /></div>
+        <div className="card overflow-hidden p-0">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-gray-400 uppercase bg-gray-50">
+                <th className="px-5 py-3">Name</th>
+                <th className="px-5 py-3">Email</th>
+                <th className="px-5 py-3">Role</th>
+                <th className="px-5 py-3">Status</th>
+                <th className="px-5 py-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {Array.from({ length: 5 }).map((_, i) => <UserRowSkeleton key={i} />)}
+            </tbody>
+          </table>
+        </div>
       ) : (
         <div className="card overflow-hidden p-0">
           <table className="w-full text-sm">
@@ -126,6 +169,7 @@ export default function Users() {
                   <td className="px-5 py-3 text-right">
                     <div className="flex justify-end gap-2">
                       <button onClick={() => openEdit(u)} className="text-xs text-blue-600 hover:underline">Edit</button>
+                      <button onClick={() => openReset(u)} className="text-xs text-indigo-600 hover:underline">Reset pwd</button>
                       <button onClick={() => handleToggleStatus(u)} className={`text-xs hover:underline ${u.is_active ? 'text-red-500' : 'text-green-600'}`}>
                         {u.is_active ? 'Deactivate' : 'Activate'}
                       </button>
@@ -188,6 +232,50 @@ export default function Users() {
           <div className="flex justify-end gap-3 pt-2 border-t">
             <button type="button" onClick={() => setEditUser(null)} className="btn-secondary">Cancel</button>
             <button type="submit" className="btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Reset Password Modal */}
+      <Modal isOpen={!!resetUser} onClose={() => setResetUser(null)} title={`Reset Password — ${resetUser?.name}`}>
+        <form onSubmit={handleResetPassword} className="space-y-4">
+          <p className="text-sm text-gray-500">Set a new password for this user. They will need to use it on their next login.</p>
+          <div>
+            <label className="label">New Password (min 8 chars)</label>
+            <input
+              type="password"
+              value={resetPwd.new}
+              onChange={(e) => setResetPwd((p) => ({ ...p, new: e.target.value }))}
+              className="input"
+              minLength={8}
+              autoComplete="new-password"
+              required
+            />
+          </div>
+          <div>
+            <label className="label">Confirm New Password</label>
+            <input
+              type="password"
+              value={resetPwd.confirm}
+              onChange={(e) => setResetPwd((p) => ({ ...p, confirm: e.target.value }))}
+              className="input"
+              minLength={8}
+              autoComplete="new-password"
+              required
+            />
+            {resetPwd.confirm && resetPwd.new !== resetPwd.confirm && (
+              <p className="text-xs text-red-500 mt-1">Passwords do not match.</p>
+            )}
+          </div>
+          <div className="flex justify-end gap-3 pt-2 border-t">
+            <button type="button" onClick={() => setResetUser(null)} className="btn-secondary">Cancel</button>
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={savingReset || (resetPwd.confirm && resetPwd.new !== resetPwd.confirm)}
+            >
+              {savingReset ? 'Resetting…' : 'Reset Password'}
+            </button>
           </div>
         </form>
       </Modal>

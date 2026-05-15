@@ -1,8 +1,13 @@
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
+import { useAuth } from '../context/AuthContext';
+import { useMentionNotifications } from '../hooks/useMentionNotifications';
 
 export default function Layout() {
+  const { user } = useAuth();
+  useMentionNotifications(user?.id);
+
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
       <Sidebar />

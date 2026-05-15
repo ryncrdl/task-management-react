@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { laravelApi, getErrorMessage } from '../api/axiosConfig';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useSocket } from '../hooks/useSocket';
 import LoadingSpinner from '../components/LoadingSpinner';
+import Modal from '../components/Modal';
 
 const STATUS_TRANSITIONS = {
   pending: ['in_progress', 'cancelled'],
@@ -35,6 +37,76 @@ export default function TaskDetail() {
   const [saving, setSaving] = useState(false);
   const [editForm, setEditForm] = useState({});
   const [teamMembers, setTeamMembers] = useState([]);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Comments
+  const [comments, setComments] = useState([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [commentBody, setCommentBody] = useState('');
+  const [submittingComment, setSubmittingComment] = useState(false);
+  const [expandedComments, setExpandedComments] = useState(new Set());
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const [showMentions, setShowMentions] = useState(false);
+  const [mentionAnchor, setMentionAnchor] = useState(null);
+  const [activeMention, setActiveMention] = useState(null); // { member, rect }
+  const commentsEndRef = useRef(null);
+  const textareaRef = useRef(null);
+  const mentionCardRef = useRef(null);
+
+  // Close mention card on outside click
+  useEffect(() => {
+    function onClickOutside(e) {
+      if (mentionCardRef.current && !mentionCardRef.current.contains(e.target)) {
+        setActiveMention(null);
+      }
+    }
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, []);
+
+  const COLLAPSE_THRESHOLD = 200;
+
+  const mentionMatches = useCallback(() => {
+    // Exclude the current user from mention suggestions
+    const others = teamMembers.filter((m) => m.id !== user?.id);
+    if (!mentionQuery) return others;
+    return others.filter((m) =>
+      m.name.toLowerCase().includes(mentionQuery.toLowerCase())
+    );
+  }, [mentionQuery, teamMembers, user?.id]);
+
+  // Real-time updates via Socket.io
+  useSocket(
+    {
+      'task:updated': (data) => {
+        if (String(data.task_id) === String(id)) { addToast('Task updated in real-time.', 'info'); loadTask(); }
+      },
+      'task:status_changed': (data) => {
+        if (String(data.task_id) === String(id)) loadTask();
+      },
+      'task:deleted': (data) => {
+        if (String(data.task_id) === String(id)) {
+          addToast('This task was deleted.', 'warning');
+          navigate('/tasks');
+        }
+      },
+      'comment:created': (data) => {
+        if (String(data.task_id) === String(id)) {
+          setComments((prev) =>
+            prev.some((c) => c.id === data.comment?.id) ? prev : [...prev, data.comment]
+          );
+          setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+        }
+      },
+      'comment:deleted': (data) => {
+        if (String(data.task_id) === String(id)) {
+          setComments((prev) => prev.filter((c) => c.id !== data.comment_id));
+        }
+      },
+    },
+    [`task:${id}`],
+  );
 
   useEffect(() => { loadTask(); }, [id]);
 
@@ -58,6 +130,17 @@ export default function TaskDetail() {
     } finally {
       setLoading(false);
     }
+  }
+
+  useEffect(() => { if (!loading && task) loadComments(); }, [loading]); // eslint-disable-line
+
+  async function loadComments() {
+    setCommentsLoading(true);
+    try {
+      const { data } = await laravelApi.get(`/tasks/${id}/comments`);
+      setComments(data.data || []);
+    } catch {}
+    finally { setCommentsLoading(false); }
   }
 
   async function loadTeamMembers(teamId) {
@@ -97,11 +180,90 @@ export default function TaskDetail() {
   }
 
   async function handleDelete() {
-    if (!window.confirm('Delete this task? This action cannot be undone.')) return;
+    setShowDeleteConfirm(true);
+  }
+
+  async function executeDelete() {
+    setShowDeleteConfirm(false);
     try {
       await laravelApi.delete(`/tasks/${id}`);
       addToast('Task deleted.', 'success');
       navigate('/tasks');
+    } catch (err) {
+      addToast(getErrorMessage(err), 'error');
+    }
+  }
+
+  function handleCommentInput(e) {
+    const val = e.target.value;
+    setCommentBody(val);
+
+    const cursor = e.target.selectionStart;
+    const textBefore = val.slice(0, cursor);
+    const match = textBefore.match(/@([\w ]*)$/);
+    if (match) {
+      setMentionQuery(match[1]);
+      setMentionAnchor({ start: cursor - match[0].length, end: cursor });
+      setShowMentions(true);
+      setMentionIndex(0);
+    } else {
+      setShowMentions(false);
+      setMentionQuery('');
+    }
+  }
+
+  function insertMention(name) {
+    if (!mentionAnchor) return;
+    const before = commentBody.slice(0, mentionAnchor.start);
+    const after  = commentBody.slice(mentionAnchor.end);
+    const inserted = `@${name} `;
+    setCommentBody(before + inserted + after);
+    setShowMentions(false);
+    setMentionQuery('');
+    setTimeout(() => {
+      const pos = (before + inserted).length;
+      textareaRef.current?.focus();
+      textareaRef.current?.setSelectionRange(pos, pos);
+    }, 0);
+  }
+
+  function handleCommentKeyDown(e) {
+    if (showMentions && mentionMatches().length > 0) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setMentionIndex((i) => Math.min(i + 1, mentionMatches().length - 1)); return; }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setMentionIndex((i) => Math.max(i - 1, 0)); return; }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        insertMention(mentionMatches()[mentionIndex].name);
+        return;
+      }
+      if (e.key === 'Escape') { setShowMentions(false); return; }
+    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleCommentSubmit(e); }
+  }
+
+  async function handleCommentSubmit(e) {
+    e.preventDefault();
+    if (!commentBody.trim()) return;
+    setSubmittingComment(true);
+    try {
+      const { data } = await laravelApi.post(`/tasks/${id}/comments`, { body: commentBody });
+      // Append locally; socket event from other users will also arrive and be deduped
+      setComments((prev) =>
+        prev.some((c) => c.id === data.data?.id) ? prev : [...prev, data.data]
+      );
+      setCommentBody('');
+      setTimeout(() => commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    } catch (err) {
+      addToast(getErrorMessage(err), 'error');
+    } finally {
+      setSubmittingComment(false);
+    }
+  }
+
+  async function handleCommentDelete(commentId) {
+    try {
+      await laravelApi.delete(`/tasks/${id}/comments/${commentId}`);
+      setComments((prev) => prev.filter((c) => c.id !== commentId));
     } catch (err) {
       addToast(getErrorMessage(err), 'error');
     }
@@ -231,6 +393,198 @@ export default function TaskDetail() {
         <p>Created: <span className="text-gray-500">{new Date(task.created_at).toLocaleString()}</span></p>
         <p>Last updated: <span className="text-gray-500">{new Date(task.updated_at).toLocaleString()}</span></p>
       </div>
+
+      {/* ── Comments ───────────────────────────────────────────────────────── */}
+      <div className="card space-y-4">
+        <h3 className="font-semibold text-gray-900">
+          Comments <span className="text-gray-400 font-normal text-sm">({comments.length})</span>
+        </h3>
+
+        {commentsLoading ? (
+          <div className="space-y-3">
+            {[1, 2].map((i) => (
+              <div key={i} className="flex gap-3 animate-pulse">
+                <div className="w-8 h-8 rounded-full bg-gray-200 shrink-0" />
+                <div className="flex-1 bg-gray-50 rounded-lg px-3 py-2 space-y-2">
+                  <div className="flex gap-2">
+                    <div className="h-3 w-20 bg-gray-200 rounded" />
+                    <div className="h-3 w-28 bg-gray-100 rounded" />
+                  </div>
+                  <div className="h-3 w-3/4 bg-gray-200 rounded" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : comments.length === 0 ? (
+          <p className="text-sm text-gray-400 italic">No comments yet. Be the first!</p>
+        ) : null}
+
+        {/* Clicked-mention user card */}
+        {activeMention && (
+          <div
+            ref={mentionCardRef}
+            className="fixed z-50 bg-white rounded-2xl shadow-2xl border border-gray-100 p-4 w-60"
+            style={{
+              top: Math.min(activeMention.rect.bottom + 8, window.innerHeight - 180),
+              left: Math.min(activeMention.rect.left, window.innerWidth - 260),
+            }}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-lg shrink-0">
+                {activeMention.member.name?.[0]?.toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-sm text-gray-900 truncate">{activeMention.member.name}</p>
+                <p className="text-xs text-gray-500 truncate">{activeMention.member.email}</p>
+                <span className="inline-block mt-1 text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full capitalize font-medium">
+                  {activeMention.member.role}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+          {comments.map((c) => {
+            const isLong = c.body.length > COLLAPSE_THRESHOLD;
+            const isExpanded = expandedComments.has(c.id);
+            const displayBody = isLong && !isExpanded ? c.body.slice(0, COLLAPSE_THRESHOLD) + '…' : c.body;
+
+            // Render body with @mention highlights (blue pill, click to view)
+            const renderBody = (text) => {
+              if (!teamMembers.length) return <span>{text}</span>;
+              // Build regex from actual member names (longest first to avoid partial matches)
+              const escaped = teamMembers
+                .map((m) => m.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+                .sort((a, b) => b.length - a.length);
+              const mentionRe = new RegExp(`@(${escaped.join('|')})`, 'gi');
+              const nodes = [];
+              let last = 0;
+              let match;
+              mentionRe.lastIndex = 0;
+              while ((match = mentionRe.exec(text)) !== null) {
+                if (match.index > last) nodes.push(<span key={last}>{text.slice(last, match.index)}</span>);
+                const matchedName = match[1];
+                const member = teamMembers.find((m) => m.name.toLowerCase() === matchedName.toLowerCase());
+                nodes.push(
+                  <button
+                    key={match.index}
+                    type="button"
+                    className="inline-flex items-center gap-0.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-semibold text-xs rounded-full px-2 py-0.5 mx-0.5 transition-colors cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setActiveMention((prev) =>
+                        prev?.member.id === member.id ? null : { member, rect }
+                      );
+                    }}
+                  >
+                    <span className="text-indigo-400">@</span>{member.name}
+                  </button>
+                );
+                last = match.index + match[0].length;
+              }
+              if (last < text.length) nodes.push(<span key={last}>{text.slice(last)}</span>);
+              return nodes.length ? nodes : <span>{text}</span>;
+            };
+
+            return (
+              <div key={c.id} className="flex gap-3 group">
+                <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold shrink-0">
+                  {c.author?.name?.[0]?.toUpperCase() ?? '?'}
+                </div>
+                <div className="flex-1 bg-gray-50 rounded-xl px-3 py-2">
+                  <div className="flex items-baseline gap-2 mb-1">
+                    <span className="text-xs font-semibold text-gray-800">{c.author?.name}</span>
+                    <span className="text-xs text-gray-400">{new Date(c.created_at).toLocaleString()}</span>
+                    {(c.user_id === user?.id || isAdmin) && (
+                      <button
+                        onClick={() => handleCommentDelete(c.id)}
+                        className="ml-auto text-xs text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                    {renderBody(displayBody)}
+                  </p>
+                  {isLong && (
+                    <button
+                      onClick={() => setExpandedComments((prev) => {
+                        const next = new Set(prev);
+                        isExpanded ? next.delete(c.id) : next.add(c.id);
+                        return next;
+                      })}
+                      className="text-xs text-indigo-500 hover:text-indigo-700 mt-1 font-medium"
+                    >
+                      {isExpanded ? 'Show less' : 'Show more'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          <div ref={commentsEndRef} />
+        </div>
+
+        {/* Comment input with @mention autocomplete */}
+        <div className="pt-2 border-t relative">
+          {showMentions && mentionMatches().length > 0 && (
+            <div className="absolute bottom-full mb-1 left-0 bg-white border border-gray-200 rounded-xl shadow-lg w-56 overflow-hidden z-20">
+              <p className="text-xs text-gray-400 px-3 pt-2 pb-1 font-medium">Mention a teammate</p>
+              {mentionMatches().map((m, i) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${i === mentionIndex ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50 text-gray-700'}`}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    insertMention(m.name);
+                  }}
+                >
+                  <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold shrink-0">
+                    {m.name[0].toUpperCase()}
+                  </span>
+                  <span className="truncate">{m.name}</span>
+                  <span className="text-xs text-gray-400 ml-auto capitalize">{m.role}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <textarea
+              ref={textareaRef}
+              value={commentBody}
+              onChange={handleCommentInput}
+              placeholder="Write a comment… type @ to mention someone"
+              rows={2}
+              className="input flex-1 resize-none"
+              onKeyDown={handleCommentKeyDown}
+            />
+            <button
+              type="button"
+              onClick={handleCommentSubmit}
+              className="btn-primary self-end"
+              disabled={submittingComment || !commentBody.trim()}
+            >
+              {submittingComment ? <LoadingSpinner size="sm" /> : 'Post'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Delete confirmation modal */}
+      <Modal isOpen={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="Delete Task" size="sm">
+        <div className="space-y-4">
+          <p className="text-gray-700">Are you sure you want to delete <span className="font-semibold">"{task?.title}"</span>? This action cannot be undone.</p>
+          <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">All comments and activity logs for this task will also be removed.</p>
+          <div className="flex justify-end gap-3 pt-1">
+            <button onClick={() => setShowDeleteConfirm(false)} className="btn-secondary">Cancel</button>
+            <button onClick={executeDelete} className="btn-primary bg-red-600 hover:bg-red-700">Delete</button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

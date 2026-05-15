@@ -30,6 +30,28 @@ export default function Settings() {
     }
   }
 
+  async function handleChangePassword(e) {
+    e.preventDefault();
+    if (passwords.new !== passwords.confirm) {
+      addToast('New passwords do not match.', 'error');
+      return;
+    }
+    setSavingPwd(true);
+    try {
+      await laravelApi.patch('/auth/password', {
+        current_password:      passwords.current,
+        new_password:          passwords.new,
+        new_password_confirmation: passwords.confirm,
+      });
+      addToast('Password changed successfully.', 'success');
+      setPasswords({ current: '', new: '', confirm: '' });
+    } catch (err) {
+      addToast(getErrorMessage(err), 'error');
+    } finally {
+      setSavingPwd(false);
+    }
+  }
+
   return (
     <div className="max-w-xl space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
@@ -91,6 +113,61 @@ export default function Settings() {
             <dd className="badge bg-blue-100 text-blue-700 capitalize">{user?.role}</dd>
           </div>
         </dl>
+      </div>
+
+      {/* Change Password */}
+      <div className="card">
+        <h2 className="font-semibold text-gray-900 mb-4">Change Password</h2>
+        <form onSubmit={handleChangePassword} className="space-y-4">
+          <div>
+            <label className="label">Current Password</label>
+            <input
+              type="password"
+              value={passwords.current}
+              onChange={(e) => setPasswords((p) => ({ ...p, current: e.target.value }))}
+              className="input"
+              autoComplete="current-password"
+              required
+            />
+          </div>
+          <div>
+            <label className="label">New Password</label>
+            <input
+              type="password"
+              value={passwords.new}
+              onChange={(e) => setPasswords((p) => ({ ...p, new: e.target.value }))}
+              className="input"
+              autoComplete="new-password"
+              minLength={8}
+              required
+            />
+          </div>
+          <div>
+            <label className="label">Confirm New Password</label>
+            <input
+              type="password"
+              value={passwords.confirm}
+              onChange={(e) => setPasswords((p) => ({ ...p, confirm: e.target.value }))}
+              className="input"
+              autoComplete="new-password"
+              minLength={8}
+              required
+            />
+            {passwords.confirm && passwords.new !== passwords.confirm && (
+              <p className="text-xs text-red-500 mt-1">Passwords do not match.</p>
+            )}
+          </div>
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={savingPwd || (passwords.confirm && passwords.new !== passwords.confirm)}
+            >
+              {savingPwd ? <LoadingSpinner size="sm" /> : null}
+              {savingPwd ? 'Saving…' : 'Change Password'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

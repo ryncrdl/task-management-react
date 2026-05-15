@@ -11,7 +11,7 @@ const PRIORITY_COLORS = {
   high: 'bg-red-100 text-red-700',
 };
 
-export default function TaskCard({ task, onClick }) {
+export default function TaskCard({ task, onClick, isSelectable = false, isSelected = false, onSelect }) {
   const isOverdue =
     task.due_date &&
     new Date(task.due_date) < new Date() &&
@@ -20,15 +20,28 @@ export default function TaskCard({ task, onClick }) {
   return (
     <div
       onClick={() => onClick?.(task)}
-      className="card hover:shadow-md transition-shadow cursor-pointer"
+      className={`card hover:shadow-md transition-all cursor-pointer ${
+        isSelected ? 'ring-2 ring-indigo-400 bg-indigo-50/30' : ''
+      }`}
     >
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <h3 className="font-medium text-gray-900 text-sm leading-tight line-clamp-2">
-          {task.title}
-        </h3>
-        <span className={`badge flex-shrink-0 ${PRIORITY_COLORS[task.priority] || 'bg-gray-100'}`}>
-          {task.priority}
-        </span>
+      <div className="flex items-start gap-3 mb-3">
+        {isSelectable && (
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={onSelect}
+            onClick={(e) => e.stopPropagation()}
+            className="mt-0.5 w-4 h-4 flex-shrink-0 accent-indigo-600 cursor-pointer"
+          />
+        )}
+        <div className="flex items-start justify-between gap-2 flex-1 min-w-0">
+          <h3 className="font-medium text-gray-900 text-sm leading-snug line-clamp-2">
+            {task.title}
+          </h3>
+          <span className={`badge flex-shrink-0 ${PRIORITY_COLORS[task.priority] || 'bg-gray-100'}`}>
+            {task.priority}
+          </span>
+        </div>
       </div>
 
       {task.description && (
