@@ -49,10 +49,10 @@ export default function CronJobs() {
       setStats(data.stats);
       // Cron schedule is fixed — define it here on the frontend
       setCrons([
-        { name: 'notification-processor', schedule: '* * * * *',   description: 'Process pending email notification jobs', running: true },
-        { name: 'daily-digest',           schedule: '0 8 * * *',   description: 'Send daily task digest emails at 08:00 UTC',   running: true },
-        { name: 'deadline-reminder',      schedule: '0 */2 * * *', description: 'Send deadline reminder emails every 2 hours',  running: true },
-        { name: 'task-cleanup',           schedule: '0 0 * * *',   description: 'Archive old completed tasks at midnight',      running: true },
+        { name: 'notification-processor', schedule: '*/30 * * * * *', human: 'Every 30 seconds',      description: 'Process pending email notification jobs', running: true },
+        { name: 'daily-digest',           schedule: '0 8 * * *',   human: 'Every day at 8:00 AM',  description: 'Send daily task digest emails at 08:00 UTC',   running: true },
+        { name: 'deadline-reminder',      schedule: '0 */2 * * *', human: 'Every 2 hours',         description: 'Send deadline reminder emails every 2 hours',  running: true },
+        { name: 'task-cleanup',           schedule: '0 0 * * *',   human: 'Every day at midnight', description: 'Archive old completed tasks at midnight',      running: true },
       ]);
     } catch (_) {}
   }, []);
@@ -147,7 +147,10 @@ export default function CronJobs() {
                 <p className="text-xs text-gray-500">{c.description}</p>
               </div>
               <div className="flex items-center gap-3">
-                <code className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{c.schedule}</code>
+                <div className="text-right">
+                  <code className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded block">{c.schedule}</code>
+                  <span className="text-xs text-gray-400">{c.human}</span>
+                </div>
                 <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${c.running ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                   {c.running ? '● Running' : '○ Stopped'}
                 </span>
