@@ -68,7 +68,9 @@ export default function Tasks() {
       'task:deleted':        () => isMember ? loadMyTasks(page) : loadTasks(page),
       'task:status_changed': () => isMember ? loadMyTasks(page) : loadTasks(page),
     },
-    selectedTeam ? [`team:${selectedTeam}`] : [],
+    isMember
+      ? (user?.id ? [`user:${user.id}`] : [])
+      : (selectedTeam ? [`team:${selectedTeam}`] : []),
   );
 
   async function loadTeams() {
