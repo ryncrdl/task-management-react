@@ -36,6 +36,16 @@ export default function ActivityLog() {
   const [filters, setFilters] = useState({ action: '', search: '', date_from: '', date_to: '' });
   const [searchInput, setSearchInput] = useState('');
   const searchTimerRef = useRef(null);
+  const [userMap, setUserMap] = useState({});
+
+  // Load user directory once to resolve assigned_to IDs → names
+  useEffect(() => {
+    laravelApi.get('/users/directory').then(({ data }) => {
+      const map = {};
+      (data.data || []).forEach(u => { map[u.id] = u.name; });
+      setUserMap(map);
+    }).catch(() => {});
+  }, []);
 
   const loadLogs = useCallback(async (p) => {
     setLoading(true);
@@ -181,16 +191,36 @@ export default function ActivityLog() {
                 {/* Change diff */}
                 {log.old_values && log.new_values && (
                   <div className="mt-1 text-xs text-gray-500 space-y-0.5">
-                    {Object.keys(log.new_values).map((field) => (
-                      field !== 'comment_body' && (
+                    {Object.keys(log.new_values).map((field) => {
+                      if (field === 'comment_body') return null;
+                      const LABELS = {
+                        assigned_to: 'Assigned To',
+                        due_date: 'Due Date',
+                        status: 'Status',
+                        priority: 'Priority',
+                        title: 'Title',
+                        description: 'Description',
+                      };
+                      const label = LABELS[field] || field;
+                      const resolve = (val) => {
+                        if (val === null || val === undefined) return null;
+                        if (field === 'assigned_to' && /^\d+$/.test(String(val))) {
+                          return userMap[val] || `User #${val}`;
+                        }
+                        return String(val);
+                      };
+                      const oldVal = resolve(log.old_values[field] ?? null);
+                      const newVal = resolve(log.new_values[field] ?? null);
+                      return (
                         <div key={field}>
-                          <span className="font-medium">{field}:</span>{' '}
-                          <span className="line-through text-red-400">{String(log.old_values[field] ?? '—')}</span>
-                          {' → '}
-                          <span className="text-green-600">{String(log.new_values[field] ?? '—')}</span>
+                          <span className="font-medium">{label}:</span>{' '}
+                          {oldVal !== null && (
+                            <><span className="line-through text-red-400">{oldVal}</span>{' → '}</>
+                          )}
+                          <span className="text-green-600">{newVal !== null ? newVal : '—'}</span>
                         </div>
-                      )
-                    ))}
+                      );
+                    })}
                     {log.new_values.comment_body && (
                       <div className="italic text-purple-600">"{log.new_values.comment_body}"</div>
                     )}

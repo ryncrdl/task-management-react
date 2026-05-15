@@ -8,6 +8,7 @@ const navItems = [
   { to: '/users',        label: 'Users',          icon: '👤', roles: ['admin', 'manager'] },
   { to: '/analytics',    label: 'Analytics',      icon: '📊', roles: ['admin', 'manager'] },
   { to: '/activity-log', label: 'Activity Log',   icon: '📜', roles: ['admin', 'manager'] },
+  { to: '/cron-jobs',    label: 'Cron Jobs',       icon: '⏱️', roles: ['admin'] },
   { to: '/settings',     label: 'Settings',       icon: '⚙️', roles: ['admin', 'manager', 'member'] },
 ];
 

@@ -13,6 +13,7 @@ import Users from './pages/Users';
 import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
 import ActivityLog from './pages/ActivityLog';
+import CronJobs from './pages/CronJobs';
 
 export default function App() {
   return (
@@ -35,6 +36,7 @@ export default function App() {
                   <Route path="/users" element={<Users />} />
                   <Route path="/analytics" element={<Analytics />} />
                   <Route path="/activity-log" element={<ActivityLog />} />
+                  <Route path="/cron-jobs" element={<CronJobs />} />
                   <Route path="/settings" element={<Settings />} />
                 </Route>
               </Route>
