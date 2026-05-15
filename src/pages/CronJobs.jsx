@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
-import { laravelApi, getErrorMessage } from '../api/axiosConfig';
+import { laravelApi, nodeApi, getErrorMessage } from '../api/axiosConfig';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
@@ -41,6 +41,8 @@ export default function CronJobs() {
   const [page, setPage]         = useState(1);
   const [retrying, setRetrying] = useState(null);
   const [deleting, setDeleting] = useState(null);
+  const [restarting, setRestarting] = useState(false);
+  const [triggering, setTriggering] = useState(false);
   const autoRefreshRef          = useRef(null);
 
   const loadStats = useCallback(async () => {
@@ -120,6 +122,32 @@ export default function CronJobs() {
     }
   }
 
+  async function handleRestartCron() {
+    setRestarting(true);
+    try {
+      await nodeApi.post('/cron/restart');
+      addToast('Cron scheduler restarted.', 'success');
+      refresh();
+    } catch (err) {
+      addToast(getErrorMessage(err), 'error');
+    } finally {
+      setRestarting(false);
+    }
+  }
+
+  async function handleTriggerNow() {
+    setTriggering(true);
+    try {
+      await nodeApi.post('/cron/trigger/notification-processor');
+      addToast('Notification processor triggered.', 'success');
+      setTimeout(refresh, 1500);
+    } catch (err) {
+      addToast(getErrorMessage(err), 'error');
+    } finally {
+      setTriggering(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -128,9 +156,17 @@ export default function CronJobs() {
           <h1 className="text-2xl font-bold text-gray-900">Cron Jobs</h1>
           <p className="text-sm text-gray-500 mt-0.5">Monitor scheduled jobs and notification queue</p>
         </div>
-        <button onClick={refresh} className="btn-secondary flex items-center gap-2 text-sm">
-          ↻ Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={handleTriggerNow} disabled={triggering} className="btn-secondary flex items-center gap-2 text-sm">
+            {triggering ? '⏳ Running...' : '▶ Run Now'}
+          </button>
+          <button onClick={handleRestartCron} disabled={restarting} className="btn-secondary flex items-center gap-2 text-sm">
+            {restarting ? '⏳ Restarting...' : '↺ Restart Cron'}
+          </button>
+          <button onClick={refresh} className="btn-secondary flex items-center gap-2 text-sm">
+            ↻ Refresh
+          </button>
+        </div>
       </div>
 
       {/* Scheduled cron jobs */}
