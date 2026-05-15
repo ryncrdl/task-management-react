@@ -48,7 +48,7 @@ export default function Tasks() {
   const [teamMembers, setTeamMembers] = useState([]);
 
   useEffect(() => { loadTeams(); loadPresets(); }, []);
-  useEffect(() => { if (selectedTeam) { setPage(1); loadTasks(1); loadTeamMembers(); } }, [selectedTeam, filters, search]);
+  useEffect(() => { if (selectedTeam) { setPage(1); loadTasks(1); loadAssignees(); } }, [selectedTeam, filters, search]);
 
   // Real-time: reload task list when tasks change in the selected team
   useSocket(
@@ -70,11 +70,19 @@ export default function Tasks() {
     } catch {}
   }
 
-  async function loadTeamMembers() {
+  async function loadAssignees() {
     if (!selectedTeam) return;
     try {
-      const { data } = await laravelApi.get(`/teams/${selectedTeam}`);
-      setTeamMembers(data.data?.members || []);
+      if (isAdmin) {
+        // Admin can assign to any user
+        const { data } = await laravelApi.get('/users/directory');
+        setTeamMembers(data.data || []);
+      } else if (isManager) {
+        // Manager can only assign to their team members
+        const { data } = await laravelApi.get(`/teams/${selectedTeam}`);
+        setTeamMembers(data.data?.members || []);
+      }
+      // Members cannot assign tasks — leave teamMembers empty
     } catch {}
   }
 
@@ -407,13 +415,15 @@ export default function Tasks() {
                 <option value="high">High</option>
               </select>
             </div>
-            <div>
-              <label className="label">Assign To</label>
-              <select value={createForm.assigned_to} onChange={(e) => setCreateForm(f => ({ ...f, assigned_to: e.target.value }))} className="input">
-                <option value="">Unassigned</option>
-                {teamMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-              </select>
-            </div>
+            {(isAdmin || isManager) && (
+              <div>
+                <label className="label">Assign To</label>
+                <select value={createForm.assigned_to} onChange={(e) => setCreateForm(f => ({ ...f, assigned_to: e.target.value }))} className="input">
+                  <option value="">Unassigned</option>
+                  {teamMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+              </div>
+            )}
           </div>
           <div>
             <label className="label">Due Date</label>

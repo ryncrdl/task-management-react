@@ -123,7 +123,7 @@ export default function TaskDetail() {
         assigned_to: t.assigned_to?.id || '',
         due_date: t.due_date ? t.due_date.slice(0, 16) : '',
       });
-      if (t.team?.id) loadTeamMembers(t.team.id);
+      if (t.team?.id) loadAssignees(t.team.id);
     } catch (err) {
       addToast(getErrorMessage(err), 'error');
       navigate('/tasks');
@@ -143,10 +143,18 @@ export default function TaskDetail() {
     finally { setCommentsLoading(false); }
   }
 
-  async function loadTeamMembers(teamId) {
+  async function loadAssignees(teamId) {
     try {
-      const { data } = await laravelApi.get(`/teams/${teamId}`);
-      setTeamMembers(data.data?.members || []);
+      if (isAdmin) {
+        // Admin can assign to any user
+        const { data } = await laravelApi.get('/users/directory');
+        setTeamMembers(data.data || []);
+      } else if (isManager) {
+        // Manager can only assign to their team members
+        const { data } = await laravelApi.get(`/teams/${teamId}`);
+        setTeamMembers(data.data?.members || []);
+      }
+      // Members cannot assign — leave teamMembers empty
     } catch {}
   }
 
