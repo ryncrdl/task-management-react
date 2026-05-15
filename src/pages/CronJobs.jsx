@@ -43,6 +43,7 @@ export default function CronJobs() {
   const [deleting, setDeleting] = useState(null);
   const [restarting, setRestarting] = useState(false);
   const [triggering, setTriggering] = useState(false);
+  const [triggeringJob, setTriggeringJob] = useState(null); // 'daily-digest' | 'deadline-reminder' | 'task-cleanup'
   const autoRefreshRef          = useRef(null);
 
   const loadStats = useCallback(async () => {
@@ -148,6 +149,19 @@ export default function CronJobs() {
     }
   }
 
+  async function handleTriggerJob(jobKey) {
+    setTriggeringJob(jobKey);
+    try {
+      await nodeApi.post(`/cron/trigger/${jobKey}`);
+      addToast(`${jobKey} triggered successfully.`, 'success');
+      setTimeout(refresh, 1500);
+    } catch (err) {
+      addToast(getErrorMessage(err), 'error');
+    } finally {
+      setTriggeringJob(null);
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -190,6 +204,16 @@ export default function CronJobs() {
                 <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${c.running ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                   {c.running ? '● Running' : '○ Stopped'}
                 </span>
+                {c.name !== 'notification-processor' && (
+                  <button
+                    onClick={() => handleTriggerJob(c.name)}
+                    disabled={triggeringJob === c.name}
+                    className="btn-secondary text-xs px-2 py-1"
+                    title={`Manually run ${c.name}`}
+                  >
+                    {triggeringJob === c.name ? '⏳' : '▶ Run'}
+                  </button>
+                )}
               </div>
             </div>
           ))}
