@@ -47,16 +47,26 @@ export default function Tasks() {
   const [showExport, setShowExport] = useState(false);
   const [teamMembers, setTeamMembers] = useState([]);
 
-  useEffect(() => { loadTeams(); loadPresets(); }, []);
-  useEffect(() => { if (selectedTeam) { setPage(1); loadTasks(1); loadAssignees(); } }, [selectedTeam, filters, search]);
+  const isMember = !isAdmin && !isManager;
+
+  useEffect(() => {
+    if (isMember) { loadMyTasks(1); }
+    else { loadTeams(); loadPresets(); }
+  }, []);
+  useEffect(() => {
+    if (!isMember && selectedTeam) { setPage(1); loadTasks(1); loadAssignees(); }
+  }, [selectedTeam, filters, search]);
+  useEffect(() => {
+    if (isMember) { setPage(1); loadMyTasks(1); }
+  }, [filters, search]);
 
   // Real-time: reload task list when tasks change in the selected team
   useSocket(
     {
-      'task:created':        () => loadTasks(1),
-      'task:updated':        () => loadTasks(page),
-      'task:deleted':        () => loadTasks(page),
-      'task:status_changed': () => loadTasks(page),
+      'task:created':        () => isMember ? loadMyTasks(1) : loadTasks(1),
+      'task:updated':        () => isMember ? loadMyTasks(page) : loadTasks(page),
+      'task:deleted':        () => isMember ? loadMyTasks(page) : loadTasks(page),
+      'task:status_changed': () => isMember ? loadMyTasks(page) : loadTasks(page),
     },
     selectedTeam ? [`team:${selectedTeam}`] : [],
   );
@@ -92,6 +102,22 @@ export default function Tasks() {
       setPresets(data.data || []);
     } catch {}
   }
+
+  const loadMyTasks = useCallback(async (p = page) => {
+    setLoading(true);
+    setSelectedIds(new Set());
+    try {
+      const params = { page: p, per_page: 20, ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v)) };
+      if (search.trim()) params.search = search.trim();
+      const { data } = await laravelApi.get('/tasks/mine', { params });
+      setTasks(data.data || []);
+      setMeta(data.meta);
+    } catch (err) {
+      addToast(getErrorMessage(err), 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [filters, search, page]);
 
   const loadTasks = useCallback(async (p = page) => {
     if (!selectedTeam) return;
@@ -225,7 +251,7 @@ export default function Tasks() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Tasks</h1>
         <div className="flex gap-2">
-          {selectedTeam && (
+          {!isMember && selectedTeam && (
             <button onClick={() => setShowExport(true)} className="btn-secondary">↓ Export</button>
           )}
           {(isAdmin || isManager) && selectedTeam && (
@@ -237,9 +263,11 @@ export default function Tasks() {
       {/* Filters + presets */}
       <div className="card p-4 space-y-3">
         <div className="flex flex-wrap gap-3">
-          <select value={selectedTeam} onChange={(e) => setSelectedTeam(e.target.value)} className="input w-40">
-            {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
+          {!isMember && (
+            <select value={selectedTeam} onChange={(e) => setSelectedTeam(e.target.value)} className="input w-40">
+              {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          )}
 
           {/* Search */}
           <div className="relative">
@@ -389,9 +417,9 @@ export default function Tasks() {
       {/* Pagination */}
       {meta && meta.last_page > 1 && (
         <div className="flex items-center justify-center gap-2">
-          <button onClick={() => { setPage(p => p - 1); loadTasks(page - 1); }} disabled={page <= 1} className="btn-secondary">← Prev</button>
+          <button onClick={() => { setPage(p => p - 1); isMember ? loadMyTasks(page - 1) : loadTasks(page - 1); }} disabled={page <= 1} className="btn-secondary">← Prev</button>
           <span className="text-sm text-gray-600">Page {meta.current_page} of {meta.last_page}</span>
-          <button onClick={() => { setPage(p => p + 1); loadTasks(page + 1); }} disabled={page >= meta.last_page} className="btn-secondary">Next →</button>
+          <button onClick={() => { setPage(p => p + 1); isMember ? loadMyTasks(page + 1) : loadTasks(page + 1); }} disabled={page >= meta.last_page} className="btn-secondary">Next →</button>
         </div>
       )}
 
