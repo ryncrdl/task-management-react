@@ -1,9 +1,8 @@
 services:
   - type: web
-    name: task-management-react
     env: static
     buildCommand: npm install && npm run build
-    staticPublishPath: ./dist
+    staticPublishPath: dist
     routes:
       - type: rewrite
         source: /*
