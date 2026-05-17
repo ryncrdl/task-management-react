@@ -22,13 +22,30 @@ export function useMentionNotifications(userId) {
 
     const socket = getSocket();
 
-    // Join (or re-join after reconnect)
-    const join = () => socket.emit('join:user', userId);
-    socket.on('connect', join);
-    if (socket.connected) join();
+    // ── Room joining ─────────────────────────────────────────────────────────
+    const join = () => {
+      console.log('[Notifications] Joining user room:', `user:${userId}`);
+      socket.emit('join:user', userId);
+    };
+
+    socket.on('connect', () => {
+      console.log('[Notifications] Socket connected, id:', socket.id);
+      join();
+    });
+
+    if (socket.connected) {
+      join();
+    } else {
+      console.log('[Notifications] Socket not yet connected, waiting...');
+    }
+
+    socket.on('disconnect', (reason) => {
+      console.log('[Notifications] Socket disconnected:', reason);
+    });
 
     // ── @mention in comment ──────────────────────────────────────────────────
     function onMentioned(data) {
+      console.log('[Notifications] user:mentioned received', data);
       const msg = `${data.mentioned_by} mentioned you in "${data.task_title}"`;
       addNotification({ type: 'mention', message: msg, task_id: data.task_id });
       addToast(msg, 'info', {
@@ -39,6 +56,9 @@ export function useMentionNotifications(userId) {
 
     // ── New task assigned to you ─────────────────────────────────────────────
     function onTaskCreated(data) {
+      console.log('[Notifications] task:created received', data, 'userId:', userId);
+      // Only notify the actual assignee (task:created is also broadcast to team room)
+      if (String(data.assigned_to) !== String(userId)) return;
       const msg = `You have been assigned a new task: "${data.title}"`;
       addNotification({ type: 'assigned', message: msg, task_id: data.task_id });
       addToast(msg, 'info', {
@@ -49,6 +69,7 @@ export function useMentionNotifications(userId) {
 
     // ── Task reassigned to you ───────────────────────────────────────────────
     function onTaskUpdated(data) {
+      console.log('[Notifications] task:updated received', data, 'userId:', userId);
       // Only notify if this user is the (new) assignee
       if (String(data.assigned_to) !== String(userId)) return;
       const msg = `You have been assigned to task: "${data.title}"`;
@@ -64,7 +85,8 @@ export function useMentionNotifications(userId) {
     socket.on('task:updated',   onTaskUpdated);
 
     return () => {
-      socket.off('connect', join);
+      socket.off('connect');
+      socket.off('disconnect');
       socket.off('user:mentioned', onMentioned);
       socket.off('task:created',   onTaskCreated);
       socket.off('task:updated',   onTaskUpdated);
