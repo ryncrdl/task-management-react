@@ -10,14 +10,17 @@ export function NotificationProvider({ children }) {
   /**
    * Fetch persisted notifications from the DB.
    * Called once after the user authenticates (from useMentionNotifications).
+   * loadedRef ensures we don't re-fetch during the same session, but resets
+   * on page refresh (component remount) so we always load fresh data.
    */
   const loadNotifications = useCallback(async () => {
     if (loadedRef.current) return;
     loadedRef.current = true;
     try {
       const { data } = await laravelApi.get('/notifications');
+      const items = data.data ?? [];
       setNotifications(
-        (data.data || []).map((n) => ({
+        items.map((n) => ({
           id:      `db-${n.id}`,
           dbId:    n.id,
           type:    n.type,
@@ -26,12 +29,17 @@ export function NotificationProvider({ children }) {
           read:    n.read,
         }))
       );
-    } catch { /* silent fail — bell will just start empty */ }
+    } catch (err) {
+      // Allow retry on next navigation if the fetch failed
+      loadedRef.current = false;
+      console.error('[Notifications] Failed to load from DB:', err?.response?.status, err?.message);
+    }
   }, []);
 
   /**
    * Add a real-time notification (from a socket event).
-   * It is already saved to DB by the backend; this just shows it instantly.
+   * The backend already saved it to DB; this just shows it instantly
+   * without waiting for the next page load.
    */
   const addNotification = useCallback((notification) => {
     setNotifications((prev) => [
