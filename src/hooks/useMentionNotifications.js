@@ -5,8 +5,12 @@ import { useToast } from '../context/ToastContext';
 import { useNotifications } from '../context/NotificationContext';
 
 /**
- * Joins the user's personal Socket.io room and listens for mention notifications.
- * Call once in a top-level authenticated component.
+ * Joins the user's personal Socket.io room and listens for:
+ *  - user:mentioned   (someone @mentioned you in a comment)
+ *  - task:created     (a new task was assigned to you)
+ *  - task:updated     (an existing task was reassigned to you)
+ *
+ * Call once in a top-level authenticated component (Layout).
  */
 export function useMentionNotifications(userId) {
   const { addToast } = useToast();
@@ -23,28 +27,47 @@ export function useMentionNotifications(userId) {
     socket.on('connect', join);
     if (socket.connected) join();
 
+    // ── @mention in comment ──────────────────────────────────────────────────
     function onMentioned(data) {
-      addNotification({
-        message: `${data.mentioned_by} mentioned you in "${data.task_title}"`,
-        task_id: data.task_id,
-        task_title: data.task_title,
-        mentioned_by: data.mentioned_by,
+      const msg = `${data.mentioned_by} mentioned you in "${data.task_title}"`;
+      addNotification({ type: 'mention', message: msg, task_id: data.task_id });
+      addToast(msg, 'info', {
+        label: 'View task',
+        onClick: () => navigate(`/tasks/${data.task_id}`),
       });
-      addToast(
-        `${data.mentioned_by} mentioned you in "${data.task_title}"`,
-        'info',
-        {
-          label: 'View task',
-          onClick: () => navigate(`/tasks/${data.task_id}`),
-        }
-      );
+    }
+
+    // ── New task assigned to you ─────────────────────────────────────────────
+    function onTaskCreated(data) {
+      const msg = `You have been assigned a new task: "${data.title}"`;
+      addNotification({ type: 'assigned', message: msg, task_id: data.task_id });
+      addToast(msg, 'info', {
+        label: 'View task',
+        onClick: () => navigate(`/tasks/${data.task_id}`),
+      });
+    }
+
+    // ── Task reassigned to you ───────────────────────────────────────────────
+    function onTaskUpdated(data) {
+      // Only notify if this user is the (new) assignee
+      if (String(data.assigned_to) !== String(userId)) return;
+      const msg = `You have been assigned to task: "${data.title}"`;
+      addNotification({ type: 'assigned', message: msg, task_id: data.task_id });
+      addToast(msg, 'info', {
+        label: 'View task',
+        onClick: () => navigate(`/tasks/${data.task_id}`),
+      });
     }
 
     socket.on('user:mentioned', onMentioned);
+    socket.on('task:created',   onTaskCreated);
+    socket.on('task:updated',   onTaskUpdated);
 
     return () => {
       socket.off('connect', join);
       socket.off('user:mentioned', onMentioned);
+      socket.off('task:created',   onTaskCreated);
+      socket.off('task:updated',   onTaskUpdated);
       socket.emit('leave:user', userId);
     };
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
