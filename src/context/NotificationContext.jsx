@@ -1,36 +1,52 @@
-import { createContext, useContext, useState, useCallback, useRef } from 'react';
+import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
 import { laravelApi } from '../api/axiosConfig';
 
 const NotificationContext = createContext(null);
+
+function mapDbNotification(n) {
+  return {
+    id:      `db-${n.id}`,
+    dbId:    n.id,
+    type:    n.type,
+    message: n.message,
+    task_id: n.task_id,
+    read:    n.read,
+  };
+}
 
 export function NotificationProvider({ children }) {
   const [notifications, setNotifications] = useState([]);
   const loadedRef = useRef(false);
 
+  // Load on mount if the user is already logged in (token in localStorage).
+  // This covers page refreshes where useMentionNotifications may not fire
+  // in time (userId not yet available).
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token || loadedRef.current) return;
+    loadedRef.current = true;
+    laravelApi.get('/notifications')
+      .then(({ data }) => {
+        setNotifications((data.data ?? []).map(mapDbNotification));
+      })
+      .catch((err) => {
+        loadedRef.current = false;
+        console.error('[Notifications] Mount load failed:', err?.response?.status, err?.message);
+      });
+  }, []);
+
   /**
    * Fetch persisted notifications from the DB.
-   * Called once after the user authenticates (from useMentionNotifications).
-   * loadedRef ensures we don't re-fetch during the same session, but resets
-   * on page refresh (component remount) so we always load fresh data.
+   * Also callable from useMentionNotifications after userId is ready.
+   * loadedRef prevents a double-fetch if the mount effect already ran.
    */
   const loadNotifications = useCallback(async () => {
     if (loadedRef.current) return;
     loadedRef.current = true;
     try {
       const { data } = await laravelApi.get('/notifications');
-      const items = data.data ?? [];
-      setNotifications(
-        items.map((n) => ({
-          id:      `db-${n.id}`,
-          dbId:    n.id,
-          type:    n.type,
-          message: n.message,
-          task_id: n.task_id,
-          read:    n.read,
-        }))
-      );
+      setNotifications((data.data ?? []).map(mapDbNotification));
     } catch (err) {
-      // Allow retry on next navigation if the fetch failed
       loadedRef.current = false;
       console.error('[Notifications] Failed to load from DB:', err?.response?.status, err?.message);
     }
