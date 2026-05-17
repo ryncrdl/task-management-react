@@ -43,20 +43,28 @@ export default function CronJobs() {
   const [deleting, setDeleting] = useState(null);
   const [restarting, setRestarting] = useState(false);
   const [triggering, setTriggering] = useState(false);
-  const [triggeringJob, setTriggeringJob] = useState(null); // 'daily-digest' | 'deadline-reminder' | 'task-cleanup'
+  const [triggeringJob, setTriggeringJob] = useState(null);
+  const [togglingJob, setTogglingJob] = useState(null); // job being paused/resumed
   const autoRefreshRef          = useRef(null);
 
   const loadStats = useCallback(async () => {
     try {
-      const { data } = await laravelApi.get('/admin/notification-jobs/stats');
-      setStats(data.stats);
-      // Cron schedule is fixed — define it here on the frontend
-      setCrons([
-        { name: 'notification-processor', schedule: '*/30 * * * * *', human: 'Every 30 seconds',      description: 'Process pending email notification jobs', running: true },
-        { name: 'daily-digest',           schedule: '0 8 * * *',   human: 'Every day at 8:00 AM',  description: 'Send daily task digest emails at 08:00 UTC',   running: true },
-        { name: 'deadline-reminder',      schedule: '0 */2 * * *', human: 'Every 2 hours',         description: 'Send deadline reminder emails every 2 hours',  running: true },
-        { name: 'task-cleanup',           schedule: '0 0 * * *',   human: 'Every day at midnight', description: 'Archive old completed tasks at midnight',      running: true },
+      const [statsRes, cronRes] = await Promise.allSettled([
+        laravelApi.get('/admin/notification-jobs/stats'),
+        nodeApi.get('/cron/status'),
       ]);
+      if (statsRes.status === 'fulfilled') setStats(statsRes.value.data.stats);
+      if (cronRes.status === 'fulfilled') {
+        setCrons(cronRes.value.data.jobs.map((j) => ({
+          ...j,
+          human: {
+            'notification-processor': 'Every 30 seconds',
+            'daily-digest':           'Every day at 8:00 AM',
+            'deadline-reminder':      'Every 2 hours',
+            'task-cleanup':           'Every day at midnight',
+          }[j.name] || j.schedule,
+        })));
+      }
     } catch (_) {}
   }, []);
 
@@ -162,6 +170,28 @@ export default function CronJobs() {
     }
   }
 
+  async function handleToggleJob(job) {
+    setTogglingJob(job.name);
+    try {
+      const action = job.paused ? 'resume' : 'pause';
+      const { data } = await nodeApi.post(`/cron/${action}/${job.name}`);
+      setCrons(data.jobs.map((j) => ({
+        ...j,
+        human: {
+          'notification-processor': 'Every 30 seconds',
+          'daily-digest':           'Every day at 8:00 AM',
+          'deadline-reminder':      'Every 2 hours',
+          'task-cleanup':           'Every day at midnight',
+        }[j.name] || j.schedule,
+      })));
+      addToast(`${job.name} ${action}d.`, 'success');
+    } catch (err) {
+      addToast(getErrorMessage(err), 'error');
+    } finally {
+      setTogglingJob(null);
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -201,15 +231,35 @@ export default function CronJobs() {
                   <code className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded block">{c.schedule}</code>
                   <span className="text-xs text-gray-400">{c.human}</span>
                 </div>
-                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${c.running ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                  {c.running ? '● Running' : '○ Stopped'}
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                  c.paused  ? 'bg-yellow-100 text-yellow-700' :
+                  c.running ? 'bg-green-100 text-green-700'   :
+                              'bg-gray-100 text-gray-500'
+                }`}>
+                  {c.paused ? '⏸ Paused' : c.running ? '● Running' : '○ Stopped'}
                 </span>
+                {/* Pause / Resume toggle */}
+                {(c.running || c.paused) && (
+                  <button
+                    onClick={() => handleToggleJob(c)}
+                    disabled={togglingJob === c.name}
+                    className={`text-xs px-2 py-1 rounded border font-medium transition-colors ${
+                      c.paused
+                        ? 'border-green-400 text-green-600 hover:bg-green-50'
+                        : 'border-yellow-400 text-yellow-600 hover:bg-yellow-50'
+                    } disabled:opacity-50`}
+                    title={c.paused ? `Resume ${c.name}` : `Pause ${c.name}`}
+                  >
+                    {togglingJob === c.name ? '⏳' : c.paused ? '▶ Resume' : '⏸ Pause'}
+                  </button>
+                )}
+                {/* Manual trigger (not for notification-processor) */}
                 {c.name !== 'notification-processor' && (
                   <button
                     onClick={() => handleTriggerJob(c.name)}
-                    disabled={triggeringJob === c.name}
-                    className="btn-secondary text-xs px-2 py-1"
-                    title={`Manually run ${c.name}`}
+                    disabled={triggeringJob === c.name || c.paused}
+                    className="btn-secondary text-xs px-2 py-1 disabled:opacity-40"
+                    title={c.paused ? 'Resume job first' : `Manually run ${c.name}`}
                   >
                     {triggeringJob === c.name ? '⏳' : '▶ Run'}
                   </button>
